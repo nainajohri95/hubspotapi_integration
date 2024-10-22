@@ -1,64 +1,109 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
 
 const ContactList = () => {
   const [contacts, setContacts] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const fetchContacts = async (page) => {
+  useEffect(() => {
+    fetchContacts();
+  }, [page]);
+
+  const fetchContacts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/contacts?page=${page}&limit=100`);
-      const data = await response.json();
-      setContacts(data.results);
+      setError("");
+      const response = await axios.get(
+        `http://localhost:5000/api/contacts/list?offset=${page * 100}`
+      );
+      setContacts(response.data.contacts);
     } catch (error) {
-      console.error('Error fetching contacts:', error);
+      console.error("Error fetching contacts", error);
+      setError("Failed to fetch contacts");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchContacts(currentPage);
-  }, [currentPage]);
+  const nextPage = () => setPage((prev) => prev + 1);
+  const prevPage = () => setPage((prev) => Math.max(prev - 1, 0));
 
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold mb-4">Contacts</h2>
-      
-      {loading ? (
-        <div className="text-center">Loading...</div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {contacts.map((contact) => (
-            <Card key={contact.id} className="shadow-sm">
-              <CardContent className="p-4">
-                <p className="font-medium">Email: {contact.properties.email}</p>
-                <p>Phone: {contact.properties.phone}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+    <Card className="max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle className="text-2xl font-bold">Contacts List</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <Alert className="mb-6 bg-red-50">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      <div className="mt-4 flex justify-center gap-2">
-        <Button 
-          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-          disabled={currentPage === 1}
-        >
-          Previous
-        </Button>
-        <span className="py-2 px-4">Page {currentPage}</span>
-        <Button 
-          onClick={() => setCurrentPage(prev => prev + 1)}
-          disabled={contacts.length < 100}
-        >
-          Next
-        </Button>
-      </div>
-    </div>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-semibold">Email</TableHead>
+                <TableHead className="font-semibold">Phone</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={2} className="text-center py-8">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                      Loading contacts...
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : contacts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={2} className="text-center py-8">
+                    No contacts found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                contacts.map((contact) => (
+                  <TableRow key={contact.id}>
+                    <TableCell>{contact.properties.email}</TableCell>
+                    <TableCell>{contact.properties.phone}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="flex justify-between mt-4">
+          <Button
+            variant="outline"
+            onClick={prevPage}
+            disabled={page === 0 || loading}
+          >
+            Previous
+          </Button>
+          <Button variant="outline" onClick={nextPage} disabled={loading}>
+            Next
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
