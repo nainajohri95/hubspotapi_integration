@@ -6,18 +6,18 @@ require("dotenv").config();
 const HUBSPOT_API_KEY = process.env.HUBSPOT_API_KEY;
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 
-// List 100 contacts (with optional pagination for bonus)
+
 router.get("/list", async (req, res) => {
   try {
-    const count = 100;
-    const { offset } = req.query; // for pagination
+    const count = 100; 
+    const { offset } = req.query;
 
     const response = await axios.get(
       `${HUBSPOT_BASE_URL}/crm/v3/objects/contacts`,
       {
         params: {
           limit: count,
-          properties: "email,phone",
+          properties: ["email", "phone", "createdAt"], 
           after: offset || 0,
         },
         headers: {
@@ -27,14 +27,22 @@ router.get("/list", async (req, res) => {
     );
 
     const contacts = response.data.results;
-    res.json({ contacts, paging: response.data.paging });
+    
+    const sortedContacts = contacts.sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    
+    res.json({ contacts: sortedContacts, paging: response.data.paging });
   } catch (error) {
-    console.error(error);
+    console.error(
+      "Error fetching contacts:",
+      error.response?.data || error.message
+    );
     res.status(500).json({ error: "Failed to fetch contacts" });
   }
 });
 
-// Add new contact
+
 router.post("/add", async (req, res) => {
   const { email, phone } = req.body;
 
@@ -43,24 +51,38 @@ router.post("/add", async (req, res) => {
       `${HUBSPOT_BASE_URL}/crm/v3/objects/contacts`,
       {
         properties: {
-          email,
-          phone,
+          email: email,
+          phone: phone,
         },
       },
       {
         headers: {
           Authorization: `Bearer ${HUBSPOT_API_KEY}`,
+          "Content-Type": "application/json",
         },
       }
     );
 
-    res.status(201).json({
-      message: "Contact created successfully",
-      contactId: response.data.id,
-    });
+    const newContact = response.data;
+    res.json({ success: true, contact: newContact });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to create contact" });
+    if (error.response?.data?.category === "CONFLICT") {
+      const existingId = error.response?.data?.message.match(/ID: (\d+)/)?.[1];
+      return res.status(409).json({
+        success: false,
+        message: "Contact already exists",
+        existingId: existingId, 
+      });
+    }
+
+    console.error(
+      "Error adding contact:",
+      error.response?.data || error.message
+    );
+    res.status(500).json({
+      error: "Failed to add contact",
+      details: error.response?.data?.message || error.message,
+    });
   }
 });
 
