@@ -6,10 +6,9 @@ require("dotenv").config();
 const HUBSPOT_API_KEY = process.env.HUBSPOT_API_KEY;
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 
-
 router.get("/list", async (req, res) => {
   try {
-    const count = 100; 
+    const count = 100;
     const { offset } = req.query;
 
     const response = await axios.get(
@@ -17,7 +16,7 @@ router.get("/list", async (req, res) => {
       {
         params: {
           limit: count,
-          properties: ["email", "phone", "createdAt"], 
+          properties: ["email", "phone", "createdAt"],
           after: offset || 0,
         },
         headers: {
@@ -27,11 +26,11 @@ router.get("/list", async (req, res) => {
     );
 
     const contacts = response.data.results;
-    
-    const sortedContacts = contacts.sort((a, b) => 
-      new Date(b.createdAt) - new Date(a.createdAt)
+
+    const sortedContacts = contacts.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
-    
+
     res.json({ contacts: sortedContacts, paging: response.data.paging });
   } catch (error) {
     console.error(
@@ -41,7 +40,6 @@ router.get("/list", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch contacts" });
   }
 });
-
 
 router.post("/add", async (req, res) => {
   const { email, phone } = req.body;
@@ -71,7 +69,7 @@ router.post("/add", async (req, res) => {
       return res.status(409).json({
         success: false,
         message: "Contact already exists",
-        existingId: existingId, 
+        existingId: existingId,
       });
     }
 

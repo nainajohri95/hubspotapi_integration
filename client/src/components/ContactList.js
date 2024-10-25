@@ -141,15 +141,27 @@ const ContactList = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    fetchContacts();
-  }, [page]);
+    const loadAllContacts = async () => {
+      const cachedNewContacts = JSON.parse(
+        localStorage.getItem("newContacts") || "[]"
+      );
+
+      await fetchContacts();
+
+      if (cachedNewContacts.length > 0) {
+        setContacts((prevContacts) => [...cachedNewContacts, ...prevContacts]);
+      }
+    };
+
+    loadAllContacts();
+  }, []);
 
   const fetchContacts = async () => {
     try {
       setLoading(true);
       setError("");
       const response = await fetch(
-        `http://localhost:5000/api/contacts/list?offset=${page * 100}`
+        `http://localhost:5000/api/contacts/list?offset=0&limit=1000`
       );
 
       if (!response.ok) {
@@ -161,16 +173,16 @@ const ContactList = () => {
       const mappedContacts = data.contacts.map((contact) => ({
         email: contact.properties?.email || "N/A",
         phone: contact.properties?.phone || "N/A",
-        createdAt: contact.createdAt, 
+        createdAt: contact.createdAt,
+        isNew: false,
       }));
 
-      const sortedContacts = mappedContacts.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      setContacts(
+        mappedContacts.sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        )
       );
-
-      setContacts(sortedContacts);
     } catch (error) {
-      console.error("Error fetching contacts:", error);
       setError(error.message || "Failed to fetch contacts");
     } finally {
       setLoading(false);
@@ -178,8 +190,19 @@ const ContactList = () => {
   };
 
   const handleContactAdded = (newContact) => {
-    const newContactWithTimestamp = { ...newContact, createdAt: new Date() };
-    setContacts((prevContacts) => [newContactWithTimestamp, ...prevContacts]);
+    const newContactWithMetadata = {
+      ...newContact,
+      createdAt: new Date().toISOString(),
+      isNew: true,
+    };
+
+    setContacts((prevContacts) => [newContactWithMetadata, ...prevContacts]);
+
+    const cachedNewContacts = JSON.parse(
+      localStorage.getItem("newContacts") || "[]"
+    );
+    const updatedCache = [newContactWithMetadata, ...cachedNewContacts];
+    localStorage.setItem("newContacts", JSON.stringify(updatedCache));
   };
 
   const filteredContacts = contacts.filter(
@@ -188,7 +211,14 @@ const ContactList = () => {
       (contact.phone?.toLowerCase() || "").includes(searchTerm.toLowerCase())
   );
 
-  const nextPage = () => setPage((prev) => prev + 1);
+  const contactsPerPage = 100;
+  const totalPages = Math.ceil(filteredContacts.length / contactsPerPage);
+  const displayedContacts = filteredContacts.slice(
+    page * contactsPerPage,
+    (page + 1) * contactsPerPage
+  );
+
+  const nextPage = () => setPage((prev) => Math.min(prev + 1, totalPages - 1));
   const prevPage = () => setPage((prev) => Math.max(prev - 1, 0));
 
   return (
@@ -207,7 +237,10 @@ const ContactList = () => {
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(0); // Reset to page 1 when searching
+                }}
                 className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none"
                 placeholder="Search by email or phone"
               />
@@ -222,13 +255,16 @@ const ContactList = () => {
             </li>
           ) : error ? (
             <li className="p-6 text-center text-red-600">{error}</li>
-          ) : filteredContacts.length === 0 ? (
+          ) : displayedContacts.length === 0 ? (
             <li className="p-6 text-center text-gray-600">
               No contacts found.
             </li>
           ) : (
-            filteredContacts.map((contact, index) => (
-              <li key={index} className="p-6">
+            displayedContacts.map((contact, index) => (
+              <li
+                key={`${contact.email}-${index}`}
+                className={`p-6 ${contact.isNew ? "bg-green-50" : ""}`}
+              >
                 <div className="flex justify-between">
                   <div className="space-y-1">
                     <p className="text-lg font-semibold">{contact.email}</p>
@@ -243,15 +279,19 @@ const ContactList = () => {
         <div className="flex justify-between items-center p-6 bg-gray-50 rounded-b-lg">
           <button
             onClick={prevPage}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={page === 0}
           >
             <ChevronLeft />
             Previous
           </button>
+          <span className="text-gray-600">
+            Page {page + 1} of {totalPages}
+          </span>
           <button
             onClick={nextPage}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            disabled={page >= totalPages - 1}
           >
             Next
             <ChevronRight />
